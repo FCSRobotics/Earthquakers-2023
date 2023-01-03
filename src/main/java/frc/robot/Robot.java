@@ -15,10 +15,13 @@ package frc.robot;
 import edu.wpi.first.hal.FRCNetComm.tInstances;
 import edu.wpi.first.hal.FRCNetComm.tResourceType;
 import edu.wpi.first.hal.HAL;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
-
+import com.revrobotics.CANSparkMax;
+import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 /**
  * The VM is configured to automatically run this class, and to call the
  * functions corresponding to each mode, as described in the TimedRobot
@@ -31,6 +34,9 @@ public class Robot extends TimedRobot {
     private Command m_autonomousCommand;
 
     private RobotContainer m_robotContainer;
+
+    private final Joystick joystick = new Joystick(0);
+    private final CANSparkMax sparkMax = new CANSparkMax(17, MotorType.kBrushless);
 
     /**
      * This function is run when the robot is first started up and should be
@@ -94,6 +100,7 @@ public class Robot extends TimedRobot {
 
     @Override
     public void teleopInit() {
+        
         // This makes sure that the autonomous stops running when
         // teleop starts running. If you want the autonomous to
         // continue until interrupted by another command, remove
@@ -108,6 +115,7 @@ public class Robot extends TimedRobot {
      */
     @Override
     public void teleopPeriodic() {
+        sparkMax.set(joystick.getY() * 0.5);
     }
 
     @Override
