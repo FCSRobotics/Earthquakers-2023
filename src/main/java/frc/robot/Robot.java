@@ -14,14 +14,38 @@ package frc.robot;
 
 import edu.wpi.first.hal.FRCNetComm.tInstances;
 import edu.wpi.first.hal.FRCNetComm.tResourceType;
+import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.hal.HAL;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PS4Controller;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.GenericHID.RumbleType;
+import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.motorcontrol.MotorControllerGroup;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+
+import com.ctre.phoenix.motorcontrol.ControlMode;
+import com.ctre.phoenix.motorcontrol.VictorSPXControlMode;
+import com.ctre.phoenix.motorcontrol.can.TalonSRX;
+import com.ctre.phoenix.motorcontrol.can.VictorSPX;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
+import com.ctre.phoenix.led.*;
+import com.ctre.phoenix.led.CANdle.LEDStripType;
+import com.ctre.phoenix.led.CANdle.VBatOutputMode;
+import com.ctre.phoenix.led.ColorFlowAnimation.Direction;
+import com.ctre.phoenix.led.LarsonAnimation.BounceMode;
+import com.ctre.phoenix.led.TwinkleAnimation.TwinklePercent;
+import com.ctre.phoenix.led.TwinkleOffAnimation.TwinkleOffPercent;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableEntry;
+import edu.wpi.first.networktables.NetworkTableInstance;
+
 /**
  * The VM is configured to automatically run this class, and to call the
  * functions corresponding to each mode, as described in the TimedRobot
@@ -35,18 +59,44 @@ public class Robot extends TimedRobot {
 
     private RobotContainer m_robotContainer;
 
-    private final Joystick joystick = new Joystick(0);
-    private final CANSparkMax sparkMax = new CANSparkMax(17, MotorType.kBrushless);
+    //private final Pigeon2 pigeon2 = new Pigeon2(31);
 
+    private final PS4Controller gamepad = new PS4Controller(0);
+
+    // private final CANSparkMax m_leftFront = new CANSparkMax(14, MotorType.kBrushless);
+    // private final CANSparkMax m_rightFront = new CANSparkMax(20, MotorType.kBrushless);
+    // private final CANSparkMax m_leftBack = new CANSparkMax(11, MotorType.kBrushless);
+    // private final CANSparkMax m_rightBack = new CANSparkMax(12, MotorType.kBrushless);
+    // private final MotorControllerGroup m_leftDrive = new MotorControllerGroup(m_leftFront, m_leftBack);
+    // private final MotorControllerGroup m_rightDrive = new MotorControllerGroup(m_rightFront, m_rightBack);
+    // private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_leftDrive, m_rightDrive);
+    private final double turningBuffer = 5;
+    private final CANSparkMax motor = new CANSparkMax(21, MotorType.kBrushless);
+    //private final CANSparkMax sparkMax = new CANSparkMax(17, MotorType.kBrushless);
+    
+    //private final CANdle m_candle = new CANdle(3, "rio");
+    //private final int LedCount = 100;
+    //private final ColorFlowAnimation m_toAnimate = new ColorFlowAnimation(128, 20, 70, 0, 0.7, LedCount, Direction.Forward);
+    //CANdleConfiguration configAll = new CANdleConfiguration();
+
+    private final Drivetrain m_swerve = new Drivetrain();
+
+    // Slew rate limiters to make joystick inputs more gentle; 1/3 sec from 0 to 1.
+    private final SlewRateLimiter m_xspeedLimiter = new SlewRateLimiter(3);
+    private final SlewRateLimiter m_yspeedLimiter = new SlewRateLimiter(3);
+    private final SlewRateLimiter m_rotLimiter = new SlewRateLimiter(3);
+       
     /**
      * This function is run when the robot is first started up and should be
      * used for any initialization code.
      */
     @Override
     public void robotInit() {
+       
         // Instantiate our RobotContainer.  This will perform all our button bindings, and put our
         // autonomous chooser on the dashboard.
         m_robotContainer = RobotContainer.getInstance();
+        //m_leftDrive.setInverted(true);
         HAL.report(tResourceType.kResourceType_Framework, tInstances.kFramework_RobotBuilder);
     }
 
@@ -96,6 +146,7 @@ public class Robot extends TimedRobot {
     */
     @Override
     public void autonomousPeriodic() {
+        
     }
 
     @Override
@@ -108,14 +159,95 @@ public class Robot extends TimedRobot {
         if (m_autonomousCommand != null) {
             m_autonomousCommand.cancel();
         }
+        // configAll.statusLedOffWhenActive = true;
+        // configAll.disableWhenLOS = false;
+        // configAll.stripType = LEDStripType.GRB;
+        // configAll.brightnessScalar = 0.1;
+        // configAll.vBatOutputMode = VBatOutputMode.Modulated;
+        // m_candle.configAllSettings(configAll, 100);
     }
+
+    private double sensitiveInput(double input) {
+       return (input * input) * (input / Math.abs(input)) * 1;
+    }
+
+    private void driveWithJoystick(boolean fieldRelative) {
+        // Get the x speed. We are inverting this because Xbox controllers return
+        // negative values when we push forward.
+        final var xSpeed =
+            -m_xspeedLimiter.calculate(MathUtil.applyDeadband(gamepad.getLeftY(), 0.02))
+                * Drivetrain.kMaxSpeed;
+    
+        // Get the y speed or sideways/strafe speed. We are inverting this because
+        // we want a positive value when we pull to the left. Xbox controllers
+        // return positive values when you pull to the right by default.
+        final var ySpeed =
+            -m_yspeedLimiter.calculate(MathUtil.applyDeadband(gamepad.getLeftX(), 0.02))
+                * Drivetrain.kMaxSpeed;
+    
+        // Get the rate of angular rotation. We are inverting this because we want a
+        // positive value when we pull to the left (remember, CCW is positive in
+        // mathematics). Xbox controllers return positive values when you pull to
+        // the right by default.
+        final var rot =
+            -m_rotLimiter.calculate(MathUtil.applyDeadband(gamepad.getRightX(), 0.02))
+                * Drivetrain.kMaxAngularSpeed;
+    
+        m_swerve.drive(xSpeed, ySpeed, rot, fieldRelative);
+      }
 
     /**
      * This function is called periodically during operator control.
      */
     @Override
     public void teleopPeriodic() {
-        sparkMax.set(joystick.getY() * 0.5);
+        driveWithJoystick(true);
+        //motor.set(gamepad.getLeftX());
+        //sparkMax.set(joys>tick.getY() * 0.2);
+        //myTalon.set(ControlMode.PercentOutput, joystick.getY() * 0.5);
+        //gamepad.setRumble(RumbleType.kRightRumble, 0);
+        // DriverStation.reportWarning("thing:" + gamepad.getTriangleButton(), false);
+       
+        
+        
+
+        //m_robotDrive.arcadeDrive(sensitiveInput(gamepad.getLeftY()) * 0.6, sensitiveInput(gamepad.getLeftX()) * 0.6);
+        DriverStation.reportWarning("I AM RUNNING MUHAHAH * 0.6a", false);
+//read values periodically
+        
+
+//post to smart dashboard periodically
+        // DriverStation.reportWarning("lightArea:" + area, false);
+        
+
+        // m_candle.setLEDs((int)(gamepad.getLeftY() * 255), 
+        //                       (int)(gamepad.getRightX() * 255), 
+        //                       (int)(gamepad.getLeftX() * 255));
+        //m_candle.animate(m_toAnimate);
+        //DriverStation.reportWarning("gamepad: " + gamepad.getR2Button(), false);
+        // if (gamepad.getSquareButton()) {
+        //     DriverStation.reportWarning("IAM AM IN THE BASEMENT", false);
+        //     NetworkTable table = NetworkTableInstance.getDefault().getTable("limelight");
+        //     NetworkTableEntry tx = table.getEntry("tx");
+        //     NetworkTableEntry ty = table.getEntry("ty");
+        //     NetworkTableEntry ta = table.getEntry("ta");
+
+        //     double x = tx.getDouble(0.0);
+        //     double y = ty.getDouble(0.0);
+        //     double area = ta.getDouble(0.0);
+            
+            // if(area > 0) {
+            // if (x >turningBuffer ) {
+            //     m_robotDrive.arcadeDrive(0, 0.2);
+            // } else if (x < -turningBuffer) {
+            //     m_robotDrive.arcadeDrive(0, -0.2);
+            // } else {
+            //     m_robotDrive.arcadeDrive(-0.2, 0);
+            // }
+            // } else {
+            //     m_robotDrive.arcadeDrive(-0.2, 0);
+            // }
+        //}
     }
 
     @Override
