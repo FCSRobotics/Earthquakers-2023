@@ -4,29 +4,35 @@
 
 package frc.robot;
 
+import com.ctre.phoenix.sensors.Pigeon2;
+import com.ctre.phoenix.sensors.Pigeon2Configuration;
+
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.wpilibj.AnalogGyro;
+import edu.wpi.first.wpilibj.DriverStation;
 
 /** Represents a swerve drive style drivetrain. */
 public class Drivetrain {
   public static final double kMaxSpeed = 3.0; // 3 meters per second
   public static final double kMaxAngularSpeed = Math.PI; // 1/2 rotation per second
 
-  private final Translation2d m_frontLeftLocation = new Translation2d(0.381, 0.381);
-  private final Translation2d m_frontRightLocation = new Translation2d(0.381, -0.381);
-  private final Translation2d m_backLeftLocation = new Translation2d(-0.381, 0.381);
-  private final Translation2d m_backRightLocation = new Translation2d(-0.381, -0.381);
+  private final Translation2d m_frontLeftLocation = new Translation2d(0.3365, 0.276);
+  private final Translation2d m_frontRightLocation = new Translation2d(0.3365, -0.276);
+  private final Translation2d m_backLeftLocation = new Translation2d(-0.3365, 0.276);
+  private final Translation2d m_backRightLocation = new Translation2d(-0.3365, -0.276);
 
-  private final SwerveModule m_frontLeft = new SwerveModule(1, 2, 0, 1, 2, 3);
-  private final SwerveModule m_frontRight = new SwerveModule(3, 4, 4, 5, 6, 7);
-  private final SwerveModule m_backLeft = new SwerveModule(5, 6, 8, 9, 10, 11);
-  private final SwerveModule m_backRight = new SwerveModule(7, 8, 12, 13, 14, 15);
+  private final SwerveModule m_frontLeft = new SwerveModule(13, 12, 35, "frontleft",-308.232);
+  private final SwerveModule m_frontRight = new SwerveModule(17, 15, 32, "frontrights",-717.802);
+  private final SwerveModule m_backLeft = new SwerveModule(19, 14, 33, "backleft",-156.09375);
+  private final SwerveModule m_backRight = new SwerveModule(11, 20, 34, "backright",172.001);
 
   private final AnalogGyro m_gyro = new AnalogGyro(0);
+  private final Pigeon2 pigeon2 = new Pigeon2(31);
 
   private final SwerveDriveKinematics m_kinematics =
       new SwerveDriveKinematics(
@@ -35,7 +41,7 @@ public class Drivetrain {
   private final SwerveDriveOdometry m_odometry =
       new SwerveDriveOdometry(
           m_kinematics,
-          m_gyro.getRotation2d(),
+          new Rotation2d(pigeon2.getYaw() * (1 / Math.PI)),
           new SwerveModulePosition[] {
             m_frontLeft.getPosition(),
             m_frontRight.getPosition(),
@@ -44,7 +50,12 @@ public class Drivetrain {
           });
 
   public Drivetrain() {
-    m_gyro.reset();
+    Pigeon2Configuration config = new Pigeon2Configuration();
+    config.MountPosePitch = 0;
+    config.MountPoseRoll = 0;
+    config.MountPoseYaw = 0;
+    pigeon2.configAllSettings(config);
+
   }
 
   /**
@@ -56,10 +67,11 @@ public class Drivetrain {
    * @param fieldRelative Whether the provided x and y speeds are relative to the field.
    */
   public void drive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
+    DriverStation.reportWarning("Hello world",false);
     var swerveModuleStates =
         m_kinematics.toSwerveModuleStates(
             fieldRelative
-                ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, rot, m_gyro.getRotation2d())
+                ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, rot, new Rotation2d(pigeon2.getYaw() * (1 / Math.PI)))
                 : new ChassisSpeeds(xSpeed, ySpeed, rot));
     SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, kMaxSpeed);
     m_frontLeft.setDesiredState(swerveModuleStates[0]);
@@ -71,7 +83,7 @@ public class Drivetrain {
   /** Updates the field relative position of the robot. */
   public void updateOdometry() {
     m_odometry.update(
-        m_gyro.getRotation2d(),
+      new Rotation2d(pigeon2.getYaw() * (1 / Math.PI)),
         new SwerveModulePosition[] {
           m_frontLeft.getPosition(),
           m_frontRight.getPosition(),

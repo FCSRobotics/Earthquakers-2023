@@ -71,7 +71,7 @@ public class Robot extends TimedRobot {
     // private final MotorControllerGroup m_rightDrive = new MotorControllerGroup(m_rightFront, m_rightBack);
     // private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_leftDrive, m_rightDrive);
     private final double turningBuffer = 5;
-    private final CANSparkMax motor = new CANSparkMax(21, MotorType.kBrushless);
+    ///private final CANSparkMax motor = new CANSparkMax(21, MotorType.kBrushless);
     //private final CANSparkMax sparkMax = new CANSparkMax(17, MotorType.kBrushless);
     
     //private final CANdle m_candle = new CANdle(3, "rio");
@@ -194,6 +194,8 @@ public class Robot extends TimedRobot {
                 * Drivetrain.kMaxAngularSpeed;
     
         m_swerve.drive(xSpeed, ySpeed, rot, fieldRelative);
+        
+
       }
 
     /**
